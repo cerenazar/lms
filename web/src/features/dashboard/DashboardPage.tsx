@@ -4,6 +4,7 @@ import { useCurrentUser } from '../../data/useCurrentUser';
 import { useCourses } from '../courses/useCourses';
 import { useStudyActivity } from './useStudyActivity';
 import { useMyGrades } from './useMyGrades';
+import { useUpcomingTasks } from './useUpcomingTasks';
 import { useAnnouncements } from '../announcements/useAnnouncements';
 import { formatRelative, sourceLabel } from '../announcements/announcementMeta';
 import type { Announcement, AnnouncementItem, GradeSummary, KpiMetric } from '../../types';
@@ -62,6 +63,7 @@ export function DashboardPage() {
   const { courses, loading: coursesLoading, error: coursesError } = useCourses();
   const study = useStudyActivity();
   const myGrades = useMyGrades();
+  const upcoming = useUpcomingTasks();
   const feed = useAnnouncements({ limit: 3 });
   const greeting = user ? `Hoş geldin, ${user.name} 👋` : 'Hoş geldin 👋';
   const studyReady = !study.loading && !study.error;
@@ -137,7 +139,12 @@ export function DashboardPage() {
         </div>
 
         <div className={styles.secondary}>
-          <UpcomingTasks tasks={data.upcomingTasks} />
+          <UpcomingTasks
+            tasks={upcoming.tasks}
+            loading={upcoming.loading}
+            error={upcoming.error}
+            onRetry={upcoming.reload}
+          />
           <AiGuideCard guide={data.aiGuide} />
           <AnnouncementsFeed announcements={feed.announcements.map(toFeedItem)} />
         </div>

@@ -104,7 +104,7 @@ export interface KpiMetric {
   progress?: number;
 }
 
-export type TaskKind = 'assignment' | 'exam' | 'lab';
+export type TaskKind = 'assignment' | 'exam' | 'lab' | 'event';
 
 export interface UpcomingTask {
   id: string;
@@ -121,6 +121,9 @@ export interface UpcomingTask {
   metaLabel: string;
   durationLabel?: string;
   actionLabel: string;
+  /** Aksiyon bağlantısı (uygulama içi yol). */
+  href: string;
+  isOverdue?: boolean;
 }
 
 export interface Announcement {
@@ -227,7 +230,6 @@ export interface DashboardData {
   term: TermInfo;
   weeklyGoalSummary: string;
   kpis: KpiMetric[];
-  upcomingTasks: UpcomingTask[];
   aiGuide: AiGuide;
   announcements: Announcement[];
 }
@@ -620,4 +622,26 @@ export interface AssignmentPayload {
   allowedExtensions?: string[];
   lessonId?: string | null;
   status?: AssignmentStatus;
+}
+
+/** GET /api/v1/users/me/upcoming-tasks — server/src/lib/upcomingTasks.ts ile birebir. */
+export type UpcomingTaskItemKind = 'assignment' | 'exam' | 'event';
+export type UpcomingTaskItemState = 'NOT_SUBMITTED' | 'OPEN' | 'UPCOMING';
+
+export interface UpcomingTaskItem {
+  id: string;
+  kind: UpcomingTaskItemKind;
+  sourceId: string;
+  title: string;
+  description: string | null;
+  course: { id: string; title: string } | null;
+  dueAt: string;
+  state: UpcomingTaskItemState;
+  isOverdue: boolean;
+  durationMinutes: number | null;
+  eventType: string | null;
+}
+
+export interface UpcomingTasksResponse {
+  tasks: UpcomingTaskItem[];
 }

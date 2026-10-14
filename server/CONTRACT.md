@@ -773,3 +773,38 @@ Teslim sahibi veya yönetici. 200: dosya akışı · 403 `FORBIDDEN` · 404
 ### GET /api/v1/users/me/assignments?status=
 Kayıtlı olunan kurslardaki PUBLISHED ödevler, öğrenci görünümü (`myStatus`/`mySubmission`), `dueAt` artan; `status` opsiyonel filtre.
 200: `{ "assignments": Assignment[] }` · 400 `VALIDATION_ERROR` (geçersiz `status`) · 401
+
+## Upcoming Tasks (Yaklaşan görevler)
+
+### GET /api/v1/users/me/upcoming-tasks?days=7
+Giriş gerekir. `days` 1–30 arası tam sayı, varsayılan 7. Yalnızca kayıtlı olunan kurslar dikkate alınır; `dueAt` artan, en fazla 20 kayıt. Geciken ödevler en üstte çıkar.
+200:
+```jsonc
+{
+  "tasks": [{
+    "id": "assignment:<id>",        // "<kind>:<sourceId>", listede benzersiz
+    "kind": "assignment",            // "assignment" | "exam" | "event"
+    "sourceId": "<id>",
+    "title": "…",
+    "description": "…",              // en fazla 140 karakter | null
+    "course": { "id": "…", "title": "…" },  // genel takvim etkinliğinde null
+    "dueAt": "2026-10-21T20:59:00.000Z",
+    "state": "NOT_SUBMITTED",        // ödev: NOT_SUBMITTED · sınav: OPEN | UPCOMING · etkinlik: UPCOMING
+    "isOverdue": false,
+    "durationMinutes": null,         // sınavlarda süre
+    "eventType": null                // event için "exam" | "deadline" | "lab"
+  }],
+  "windowDays": 7,
+  "serverTime": "ISO"
+}
+```
+400 `VALIDATION_ERROR` (days aralık dışı/tam sayı değil) · 401
+
+Kaynaklar:
+- Ödev: `PUBLISHED`, kullanıcının teslimi yok, `dueAt` ∈ [şimdi − 7 gün, şimdi + days]. Geçmiş olanlar `isOverdue: true`. `dueAt` = `Assignment.dueAt`.
+- Sınav: `GET /exams/my` ile aynı görünürlük; `OPEN` → `dueAt = endsAt`, `UPCOMING` → `dueAt = startsAt`; ilgili tarih pencere içinde olmalı. İlgili tarihi boş sınav (ör. bitişi olmayan açık sınav) listeye girmez.
+- Takvim: `type ∈ {exam, deadline, lab}`, genel (`courseId: null`) ya da kayıtlı kurs, `start` ∈ [şimdi, şimdi + days].
+
+Bilinen sınırlar:
+- Sınav deneme (attempt) modeli olmadığından çözülmüş sınav ayıklanamaz; çözülmüş olsa da `OPEN`/`UPCOMING` sınav listede kalır.
+- Aynı sınav hem `Exam` hem `CalendarEvent(type=exam)` olarak girilmişse iki kayıt döner (tekilleştirme yok).

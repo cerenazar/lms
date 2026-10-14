@@ -22,6 +22,7 @@ import { registerUserRoutes } from './routes/users.js';
 import { registerAdminUserRoutes } from './routes/adminUsers.js';
 import { registerAssignmentRoutes } from './routes/assignments.js';
 import { registerNavItemRoutes } from './routes/nav-items.js';
+import { registerUpcomingTaskRoutes } from './routes/upcomingTasks.js';
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({ logger: true });
@@ -69,6 +70,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   registerAdminUserRoutes(app);
   registerAssignmentRoutes(app);
   registerNavItemRoutes(app);
+  registerUpcomingTaskRoutes(app);
 
   await app.ready();
   return app;
