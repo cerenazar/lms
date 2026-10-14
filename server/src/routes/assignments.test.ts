@@ -289,6 +289,21 @@ describe('assignment routes', () => {
       expect(diskFiles()).toHaveLength(0);
       expect(await prisma.assignmentSubmission.count()).toBe(0);
     });
+
+    it('removes the course files from disk when the course is deleted, keeping other courses', async () => {
+      const a = await makeAssignment();
+      await upload(`/api/v1/assignments/${a.id}/attachments`, tokens.instructor, [file('a.pdf', PDF)]);
+      await submit(tokens.s1, a.id, [file('b.pdf', PDF)]);
+      const other = await makeAssignment({ courseId: otherCourseId });
+      await upload(`/api/v1/assignments/${other.id}/attachments`, tokens.admin, [file('c.pdf', PDF)]);
+      expect(diskFiles()).toHaveLength(3);
+      const otherStored = (await prisma.assignmentAttachment.findFirstOrThrow({ where: { assignmentId: other.id } }))
+        .storedName;
+
+      expect((await call('DELETE', `/api/v1/courses/${courseId}`, tokens.admin)).json()).toEqual({ success: true });
+      expect(diskFiles()).toEqual([otherStored]);
+      expect(await prisma.assignment.count()).toBe(1);
+    });
   });
 
   describe('submissions', () => {
