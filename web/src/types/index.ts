@@ -526,3 +526,98 @@ export interface CourseReviewsResponse {
   mine: CourseReview | null;
   permissions: CourseReviewPermissions;
 }
+
+// ---------------------------------------------------------------------------
+// Ödev sistemi
+// ---------------------------------------------------------------------------
+
+export interface FileMeta {
+  id: string;
+  name: string;
+  size: number;
+  mimeType: string;
+  createdAt: string;
+}
+
+export type SubmissionStatus = 'NOT_SUBMITTED' | 'SUBMITTED' | 'GRADED';
+
+export type AssignmentStatus = 'DRAFT' | 'PUBLISHED';
+
+export interface Submission {
+  id: string;
+  assignmentId: string;
+  userId: string;
+  text: string | null;
+  files: FileMeta[];
+  submittedAt: string;
+  isLate: boolean;
+  score: number | null;
+  feedback: string | null;
+  gradedAt: string | null;
+}
+
+export interface AssignmentStats {
+  enrolledCount: number;
+  submittedCount: number;
+  gradedCount: number;
+  lateCount: number;
+}
+
+export interface Assignment {
+  id: string;
+  courseId: string;
+  courseTitle: string;
+  lessonId: string | null;
+  lessonTitle: string | null;
+  title: string;
+  description: string;
+  dueAt: string;
+  maxScore: number;
+  allowedExtensions: string[];
+  status: AssignmentStatus;
+  attachments: FileMeta[];
+  createdAt: string;
+  updatedAt: string;
+  /** Yalnızca öğrenci görünümünde. */
+  myStatus?: SubmissionStatus;
+  mySubmission?: Submission | null;
+  /** Yalnızca yönetici görünümünde. */
+  stats?: AssignmentStats;
+}
+
+export interface SubmissionRow {
+  student: { id: string; name: string; email: string; avatarUrl: string | null };
+  status: SubmissionStatus;
+  submission: Submission | null;
+}
+
+export interface CourseAssignmentsResponse {
+  assignments: Assignment[];
+  canManage: boolean;
+}
+
+export interface AssignmentResponse {
+  assignment: Assignment;
+}
+
+export interface MyAssignmentsResponse {
+  assignments: Assignment[];
+}
+
+export interface SubmissionsResponse {
+  submissions: SubmissionRow[];
+}
+
+export interface SubmissionResponse {
+  submission: Submission;
+}
+
+export interface AssignmentPayload {
+  title?: string;
+  description?: string;
+  dueAt?: string;
+  maxScore?: number;
+  allowedExtensions?: string[];
+  lessonId?: string | null;
+  status?: AssignmentStatus;
+}

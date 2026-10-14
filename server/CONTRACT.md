@@ -706,3 +706,70 @@ Body: `{ "body": string }` (yalnızca yazar)
 ### DELETE /api/v1/course-review-replies/:replyId
 Yazar veya ADMIN / atanmış INSTRUCTOR.
 200: `{ "success": true }` · 403 · 404
+
+## Assignments (Ödevler)
+
+Saklama: `Assignment` (kursa bağlı, isteğe bağlı olarak aynı kurstaki bir derse; `status` `"DRAFT"` | `"PUBLISHED"`), `AssignmentAttachment` (eğitmen açıklama dosyaları), `AssignmentSubmission` (ödev başına öğrenci başına tek teslim, güncellenemez) ve `SubmissionFile`. Dosyalar diskte `UPLOAD_DIR` (varsayılan `server/uploads`) altında rastgele 32 haneli hex adla durur; özgün ad yalnızca veritabanında ve indirme başlığındadır. Ödev/ek/teslim silinince dosyalar diskten de silinir. Tüm uçlar `requireAuth` ister.
+
+Yetki: yönetici (`manage`) = ADMIN veya kursa atanmış aktif INSTRUCTOR. Okuma: yönetici veya kayıtlı (değilse 403 `NOT_ENROLLED`). Taslak ödev yönetici olmayanlara 404 `Ödev bulunamadı.` (ek dosya indirme dahil). Yönetim uçları yönetici değilse 403 `FORBIDDEN` ("Bu işlem için yetkiniz yok."). Teslim ve teslim dosyası: yalnızca teslim sahibi veya yönetici, diğerleri 403 `FORBIDDEN`.
+
+Dosya yükleme: `multipart/form-data`, alan adı `files`; dosya başına 10 MB (413 `FILE_TOO_LARGE`), istek başına en fazla 5 dosya (400 `TOO_MANY_FILES`); multipart olmayan istek 415 `UNSUPPORTED_MEDIA_TYPE`. Uzantı beyaz listesi: `pdf, doc, docx, xls, xlsx, ppt, pptx, odt, txt, md, csv, zip, png, jpg, jpeg, gif, py, java, c, cpp, js, ts, ipynb, sql`. Teslimde uzantı ödevin `allowedExtensions` listesinde olmalı (boş liste = yalnızca metin); uzantı/MIME uyuşmazlığı veya imza (magic byte) uyuşmazlığı (pdf, png, jpg/jpeg, gif, zip/docx/xlsx/pptx/odt) → 400 `FILE_TYPE_NOT_ALLOWED`. Hata durumunda o istekte yazılan tüm dosyalar silinir. Dosya adı sanitize edilir (yol bileşenleri atılır, ≤200 karakter).
+
+İndirme yanıtı: `Content-Type: application/octet-stream`, `Content-Disposition: attachment; filename="<ascii>"; filename*=UTF-8''<özgün ad>`, `X-Content-Type-Options: nosniff`, `Content-Length`; dosya diskte yoksa 404.
+
+Tipler (tarihler ISO string):
+`FileMeta = { "id", "name", "size": number, "mimeType", "createdAt" }`
+`SubmissionStatus = "NOT_SUBMITTED" | "SUBMITTED" | "GRADED"`
+`Submission = { "id", "assignmentId", "userId", "text": string | null, "files": FileMeta[], "submittedAt", "isLate": boolean, "score": number | null, "feedback": string | null, "gradedAt": string | null }`
+`Assignment = { "id", "courseId", "courseTitle", "lessonId": string | null, "lessonTitle": string | null, "title", "description", "dueAt", "maxScore": number, "allowedExtensions": string[], "status": "DRAFT" | "PUBLISHED", "attachments": FileMeta[], "createdAt", "updatedAt" }` + yönetici ise `"stats": { "enrolledCount", "submittedCount", "gradedCount", "lateCount" }`, değilse `"myStatus": SubmissionStatus` ve `"mySubmission": Submission | null` (ikisi birlikte asla dönmez; başka öğrencilerin verisi öğrenci görünümüne girmez).
+`SubmissionRow = { "student": { "id", "name", "email", "avatarUrl": string | null }, "status": SubmissionStatus, "submission": Submission | null }`
+
+Doğrulama: `title` 1–200 (trim); `description` 0–10000 (trim, oluşturmada opsiyonel); `dueAt` ISO tarih (geçmiş olabilir); `maxScore` 1–1000 tam sayı (varsayılan 100); `allowedExtensions` string[] (küçük harfe çevrilir, baştaki nokta atılır, tekrarlar atılır, beyaz liste dışı → 400 `VALIDATION_ERROR`); `lessonId` null veya aynı kurstaki ders (değilse 400 `INVALID_LESSON` "Ders bu kursa ait değil."); `status` varsayılan `DRAFT`.
+
+### GET /api/v1/courses/:courseId/assignments
+200: `{ "assignments": Assignment[], "canManage": boolean }` (öğrenciye yalnızca PUBLISHED; `dueAt` artan) · 401 · 403 `NOT_ENROLLED` · 404
+
+### POST /api/v1/courses/:courseId/assignments
+Body (JSON): `{ "title", "description"?, "dueAt", "maxScore"?, "allowedExtensions"?, "lessonId"?, "status"? }`
+201: `{ "assignment": Assignment }` · 400 `VALIDATION_ERROR` / `INVALID_LESSON` · 403 `FORBIDDEN` · 404
+
+### GET /api/v1/assignments/:id
+200: `{ "assignment": Assignment }` · 403 `NOT_ENROLLED` · 404
+
+### PATCH /api/v1/assignments/:id
+Body: yukarıdaki alanların herhangi biri (en az biri). `maxScore` verilmiş en yüksek puanın altına indirilemez.
+200: `{ "assignment": Assignment }` · 400 `VALIDATION_ERROR` / `INVALID_LESSON` / `MAX_SCORE_BELOW_GRADES` · 403 · 404
+
+### DELETE /api/v1/assignments/:id
+200: `{ "success": true }` (teslimler ve tüm dosyalar silinir) · 403 · 404
+
+### POST /api/v1/assignments/:id/attachments
+Multipart: `files` (1–5). Yalnızca yönetici; yalnızca küresel uzantı listesi geçerli.
+201: `{ "attachments": FileMeta[] }` · 400 `VALIDATION_ERROR` / `FILE_TYPE_NOT_ALLOWED` / `TOO_MANY_FILES` · 403 · 404 · 413 `FILE_TOO_LARGE` · 415
+
+### DELETE /api/v1/assignment-attachments/:id
+200: `{ "success": true }` · 403 · 404
+
+### GET /api/v1/assignment-attachments/:id/download
+Okuma yetkisi (taslak ödevde yönetici dışına 404). 200: dosya akışı · 403 · 404
+
+### POST /api/v1/assignments/:id/submissions
+Kayıtlı kullanıcı, ödev PUBLISHED. Multipart: `text` (opsiyonel, trim, ≤20000) ve `files` (0–5); en az biri zorunlu.
+201: `{ "submission": Submission }` (`isLate` = teslim anı > `dueAt`) · 400 `VALIDATION_ERROR` ("Metin veya dosyadan en az biri gereklidir.") / `FILE_TYPE_NOT_ALLOWED` / `TOO_MANY_FILES` · 403 `NOT_ENROLLED` · 404 · 409 `SUBMISSION_EXISTS` ("Bu ödevi zaten teslim ettiniz.") · 413 `FILE_TOO_LARGE` · 415
+
+### GET /api/v1/assignments/:id/submissions
+Yönetici. 200: `{ "submissions": SubmissionRow[] }` (kursa kayıtlı herkes, ada göre) · 403 · 404
+
+### GET /api/v1/submissions/:id
+Teslim sahibi veya yönetici. 200: `{ "submission": Submission }` · 403 `FORBIDDEN` · 404
+
+### PUT /api/v1/submissions/:id/grade
+Body: `{ "score": 0..maxScore (tam sayı), "feedback"?: string | null }` (≤10000; boş → null). Tekrar çağrı notu düzeltir.
+200: `{ "submission": Submission }` · 400 `VALIDATION_ERROR` · 403 · 404
+
+### GET /api/v1/submission-files/:id/download
+Teslim sahibi veya yönetici. 200: dosya akışı · 403 `FORBIDDEN` · 404
+
+### GET /api/v1/users/me/assignments?status=
+Kayıtlı olunan kurslardaki PUBLISHED ödevler, öğrenci görünümü (`myStatus`/`mySubmission`), `dueAt` artan; `status` opsiyonel filtre.
+200: `{ "assignments": Assignment[] }` · 400 `VALIDATION_ERROR` (geçersiz `status`) · 401

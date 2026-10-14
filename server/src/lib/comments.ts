@@ -1,7 +1,6 @@
 import { AppError } from '../errors.js';
 import { prisma } from './prisma.js';
-import { canManageCourse } from './courseAccess.js';
-import { assertEnrolled } from './lessonAccess.js';
+import { canManageCourse, isEnrolled, assertCanRead } from './courseAccess.js';
 import { roundAverage } from './feedback.js';
 import type { TokenPayload } from './jwt.js';
 
@@ -82,20 +81,7 @@ export function replyRole(user: CommentUser): ReplyRole {
   return user.role === 'ADMIN' ? 'ADMIN' : 'INSTRUCTOR';
 }
 
-export async function isEnrolled(userId: string, courseId: string): Promise<boolean> {
-  const row = await prisma.enrollment.findUnique({
-    where: { userId_courseId: { userId, courseId } },
-    select: { id: true },
-  });
-  return Boolean(row);
-}
-
-/** canManageCourse veya kayıtlı; değilse 403 NOT_ENROLLED. Yönetici olup olmadığını döner. */
-export async function assertCanRead(user: CommentUser, courseId: string): Promise<boolean> {
-  const manage = await canManageCourse(user, courseId);
-  if (!manage) await assertEnrolled(user.userId, courseId);
-  return manage;
-}
+export { isEnrolled, assertCanRead };
 
 export function assertReplyAllowed(canManage: boolean) {
   if (!canManage) {

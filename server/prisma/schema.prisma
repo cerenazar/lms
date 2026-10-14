@@ -45,6 +45,10 @@ model User {
   lessonComments       LessonComment[]     @relation("LessonCommentsAuthored")
   courseReviews        CourseReview[]      @relation("CourseReviewsAuthored")
   courseReviewReplies  CourseReviewReply[] @relation("CourseReviewRepliesAuthored")
+  assignmentsCreated              Assignment[]           @relation("AssignmentsCreated")
+  assignmentAttachmentsUploaded   AssignmentAttachment[] @relation("AssignmentAttachmentsUploaded")
+  assignmentSubmissions           AssignmentSubmission[] @relation("AssignmentSubmissions")
+  assignmentSubmissionsGraded     AssignmentSubmission[] @relation("AssignmentSubmissionsGraded")
 }
 
 model Course {
@@ -65,6 +69,7 @@ model Course {
   questionBanks QuestionBank[]
   exams         Exam[]
   reviews       CourseReview[]
+  assignments   Assignment[]
 }
 
 model Module {
@@ -91,6 +96,7 @@ model Lesson {
   quizGrades  QuizGrade[]
   lessonFeedback LessonFeedback[]
   comments    LessonComment[]
+  assignments Assignment[]
 }
 
 /// Ders başına kullanıcı geri bildirimi: beğeni ve/veya 1–5 puan. İkisi de boşsa satır tutulmaz.
@@ -420,4 +426,89 @@ model CourseReviewReply {
 
   @@index([reviewId, createdAt])
   @@index([authorId])
+}
+
+/// Ödev (FR-60). Kursa aittir; isteğe bağlı olarak aynı kurstaki bir derse iliştirilir.
+/// Öğrenciler yalnızca PUBLISHED ödevleri görür.
+model Assignment {
+  id                String                 @id @default(cuid())
+  courseId          String
+  course            Course                 @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  /// Doluysa ödev bu derse bağlıdır (ders aynı kursa ait olmalı; API zorlar). Ders silinirse bağ kopar.
+  lessonId          String?
+  lesson            Lesson?                @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  title             String
+  /// Düz metin; paragraflar boş satırla ayrılır.
+  description       String
+  /// Teslim tarihi (UTC). Sonrasında teslim kabul edilir ama isLate = true olur.
+  dueAt             DateTime
+  maxScore          Int                    @default(100)
+  /// Teslimde kabul edilen uzantılar: küçük harf, noktasız, virgülle ayrılmış (ör. "pdf,zip"). Boşsa yalnızca metin teslimi.
+  allowedExtensions String                 @default("")
+  /// Allowed literals: "DRAFT" | "PUBLISHED"
+  status            String                 @default("DRAFT")
+  createdById       String?
+  createdBy         User?                  @relation("AssignmentsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+  attachments       AssignmentAttachment[]
+  submissions       AssignmentSubmission[]
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+
+  @@index([courseId, dueAt])
+  @@index([lessonId])
+}
+
+/// Eğitmenin ödeve eklediği açıklama dosyası. Dosya diskte UPLOAD_DIR/<storedName> olarak durur.
+model AssignmentAttachment {
+  id           String     @id @default(cuid())
+  assignmentId String
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  /// Kullanıcının yüklediği (sanitize edilmiş) dosya adı; yalnızca indirmede gösterilir.
+  originalName String
+  /// Diskteki rastgele ad (uzantısız, 32 hex). Kullanıcı girdisinden türetilmez.
+  storedName   String     @unique
+  mimeType     String
+  size         Int
+  uploadedById String?
+  uploadedBy   User?      @relation("AssignmentAttachmentsUploaded", fields: [uploadedById], references: [id], onDelete: SetNull)
+  createdAt    DateTime   @default(now())
+
+  @@index([assignmentId])
+}
+
+/// Öğrenci teslimi (FR-61). Ödev başına öğrenci başına tek teslim; güncellenemez.
+model AssignmentSubmission {
+  id           String           @id @default(cuid())
+  assignmentId String
+  assignment   Assignment       @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User             @relation("AssignmentSubmissions", fields: [userId], references: [id], onDelete: Cascade)
+  text         String?
+  submittedAt  DateTime         @default(now())
+  /// submittedAt > assignment.dueAt ise true (teslim anında hesaplanır, sonradan değişmez).
+  isLate       Boolean          @default(false)
+  /// 0–maxScore arası tam sayı; null ise henüz notlanmadı (FR-63).
+  score        Int?
+  feedback     String?
+  gradedAt     DateTime?
+  gradedById   String?
+  gradedBy     User?            @relation("AssignmentSubmissionsGraded", fields: [gradedById], references: [id], onDelete: SetNull)
+  files        SubmissionFile[]
+
+  @@unique([assignmentId, userId])
+  @@index([userId])
+}
+
+/// Teslime ait dosya. Dosya diskte UPLOAD_DIR/<storedName> olarak durur.
+model SubmissionFile {
+  id           String               @id @default(cuid())
+  submissionId String
+  submission   AssignmentSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  originalName String
+  storedName   String               @unique
+  mimeType     String
+  size         Int
+  createdAt    DateTime             @default(now())
+
+  @@index([submissionId])
 }

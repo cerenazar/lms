@@ -1,5 +1,6 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
+import multipart from '@fastify/multipart';
 import { errorHandler } from './errors.js';
 import { registerAuthRoutes } from './routes/auth.js';
 import { registerCourseRoutes } from './routes/courses.js';
@@ -19,6 +20,7 @@ import { registerQuestionBankRoutes } from './routes/questionBanks.js';
 import { registerExamRoutes } from './routes/exams.js';
 import { registerUserRoutes } from './routes/users.js';
 import { registerAdminUserRoutes } from './routes/adminUsers.js';
+import { registerAssignmentRoutes } from './routes/assignments.js';
 import { registerNavItemRoutes } from './routes/nav-items.js';
 
 export async function buildApp(): Promise<FastifyInstance> {
@@ -41,6 +43,11 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   await app.register(cors, { origin: process.env.CORS_ORIGIN ?? 'http://localhost:5173' });
 
+  await app.register(multipart, {
+    throwFileSizeLimit: true,
+    limits: { fileSize: 10 * 1024 * 1024, files: 5, fields: 10, fieldSize: 64 * 1024, parts: 20 },
+  });
+
   app.get('/api/v1/health', async () => ({ status: 'ok' }));
   registerAuthRoutes(app);
   registerCourseRoutes(app);
@@ -60,6 +67,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   registerExamRoutes(app);
   registerUserRoutes(app);
   registerAdminUserRoutes(app);
+  registerAssignmentRoutes(app);
   registerNavItemRoutes(app);
 
   await app.ready();

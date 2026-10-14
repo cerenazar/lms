@@ -4,6 +4,7 @@ import { PageContainer } from '../../layout/PageContainer';
 import { useCurrentUser } from '../../data/useCurrentUser';
 import { CourseInstructors } from './CourseInstructors';
 import { CourseReviews } from './CourseReviews';
+import { CourseAssignments } from '../assignments';
 import { useCourseDetail } from './useCourseDetail';
 import { CONTENT_TYPE_BADGE_TONES, CONTENT_TYPE_ICONS, CONTENT_TYPE_LABELS } from './contentType';
 import styles from './CourseDetailPage.module.css';
@@ -188,6 +189,8 @@ export function CourseDetailPage() {
               </div>
             </Panel>
           )}
+
+          {(course.isEnrolled || canManage) && <CourseAssignments courseId={course.id} modules={course.modules} />}
 
           {(course.isEnrolled || canManage) && <CourseReviews courseId={course.id} />}
         </>
