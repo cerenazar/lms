@@ -42,6 +42,9 @@ model User {
   questionsCreated     Question[]     @relation("QuestionsCreated")
   examsCreated         Exam[]         @relation("ExamsCreated")
   examCandidacies      ExamCandidate[]
+  lessonComments       LessonComment[]     @relation("LessonCommentsAuthored")
+  courseReviews        CourseReview[]      @relation("CourseReviewsAuthored")
+  courseReviewReplies  CourseReviewReply[] @relation("CourseReviewRepliesAuthored")
 }
 
 model Course {
@@ -61,6 +64,7 @@ model Course {
   announcements Announcement[]
   questionBanks QuestionBank[]
   exams         Exam[]
+  reviews       CourseReview[]
 }
 
 model Module {
@@ -86,6 +90,7 @@ model Lesson {
   lessonProgress LessonProgress[]
   quizGrades  QuizGrade[]
   lessonFeedback LessonFeedback[]
+  comments    LessonComment[]
 }
 
 /// Ders başına kullanıcı geri bildirimi: beğeni ve/veya 1–5 puan. İkisi de boşsa satır tutulmaz.
@@ -353,4 +358,66 @@ model ExamCandidate {
 
   @@unique([examId, userId])
   @@index([userId])
+}
+
+/// Ders yorumu. parentId boşsa üst düzey öğrenci yorumudur; doluysa eğitmen/admin yanıtıdır.
+/// Yalnızca tek seviye: yanıtın parentId'si her zaman üst düzey bir yoruma işaret eder (API zorlar).
+model LessonComment {
+  id         String          @id @default(cuid())
+  lessonId   String
+  lesson     Lesson          @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  authorId   String
+  author     User            @relation("LessonCommentsAuthored", fields: [authorId], references: [id], onDelete: Cascade)
+  parentId   String?
+  parent     LessonComment?  @relation("LessonCommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies    LessonComment[] @relation("LessonCommentReplies")
+  /// Yalnızca yanıtlarda dolu: yazıldığı andaki aktif rol. Allowed literals: "INSTRUCTOR" | "ADMIN"
+  authorRole String?
+  body       String
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+  /// Yazar metni düzenlediyse son düzenleme anı.
+  editedAt   DateTime?
+
+  @@index([lessonId, parentId, createdAt])
+  @@index([parentId, createdAt])
+  @@index([authorId])
+}
+
+/// Kurs değerlendirmesi: öğrenci başına kurs başına en fazla bir kayıt.
+model CourseReview {
+  id        String              @id @default(cuid())
+  courseId  String
+  course    Course              @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User                @relation("CourseReviewsAuthored", fields: [userId], references: [id], onDelete: Cascade)
+  /// 1–5 arası tam sayı; DB zorlamaz, API doğrular.
+  rating    Int
+  body      String?
+  replies   CourseReviewReply[]
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+  editedAt  DateTime?
+
+  @@unique([courseId, userId])
+  @@index([courseId, createdAt])
+  @@index([userId])
+}
+
+/// Değerlendirmeye eğitmen/admin yanıtı (tek seviye).
+model CourseReviewReply {
+  id         String       @id @default(cuid())
+  reviewId   String
+  review     CourseReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  authorId   String
+  author     User         @relation("CourseReviewRepliesAuthored", fields: [authorId], references: [id], onDelete: Cascade)
+  /// Allowed literals: "INSTRUCTOR" | "ADMIN"
+  authorRole String
+  body       String
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+  editedAt   DateTime?
+
+  @@index([reviewId, createdAt])
+  @@index([authorId])
 }

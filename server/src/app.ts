@@ -11,6 +11,8 @@ import { registerProgressRoutes } from './routes/progress.js';
 import { registerActivityRoutes } from './routes/activity.js';
 import { registerGradeRoutes } from './routes/grades.js';
 import { registerFeedbackRoutes } from './routes/feedback.js';
+import { registerLessonCommentRoutes } from './routes/lessonComments.js';
+import { registerCourseReviewRoutes } from './routes/courseReviews.js';
 import { registerCalendarRoutes } from './routes/calendar.js';
 import { registerAnnouncementRoutes } from './routes/announcements.js';
 import { registerQuestionBankRoutes } from './routes/questionBanks.js';
@@ -50,6 +52,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   registerActivityRoutes(app);
   registerGradeRoutes(app);
   registerFeedbackRoutes(app);
+  registerLessonCommentRoutes(app);
+  registerCourseReviewRoutes(app);
   registerCalendarRoutes(app);
   registerAnnouncementRoutes(app);
   registerQuestionBankRoutes(app);

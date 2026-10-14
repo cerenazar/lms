@@ -453,3 +453,76 @@ export interface MyExam {
   questionCount: number;
   availability: ExamAvailability;
 }
+
+/** Yorum/değerlendirme yazarı (e-posta dönmez). */
+export interface CommentAuthor {
+  id: string;
+  name: string;
+  avatarUrl: string | null;
+}
+
+export type CommentAuthorRole = 'INSTRUCTOR' | 'ADMIN';
+
+/** Eğitmen/yönetici yanıtı (ders yorumu veya kurs değerlendirmesi altında). */
+export interface CommentReply {
+  id: string;
+  body: string;
+  createdAt: string;
+  editedAt: string | null;
+  author: CommentAuthor;
+  authorRole: CommentAuthorRole;
+  canEdit: boolean;
+  canDelete: boolean;
+}
+
+/** Ders yorumu (`LessonFeedback` ile karıştırılmamalı: o beğeni/puan özetidir). */
+export interface LessonComment {
+  id: string;
+  body: string;
+  createdAt: string;
+  editedAt: string | null;
+  author: CommentAuthor;
+  canEdit: boolean;
+  canDelete: boolean;
+  replies: CommentReply[];
+}
+
+export interface LessonCommentPermissions {
+  canComment: boolean;
+  canReply: boolean;
+}
+
+export interface LessonCommentsResponse {
+  comments: LessonComment[];
+  permissions: LessonCommentPermissions;
+}
+
+export interface CourseReview {
+  id: string;
+  rating: number;
+  body: string | null;
+  createdAt: string;
+  editedAt: string | null;
+  author: CommentAuthor;
+  canEdit: boolean;
+  canDelete: boolean;
+  replies: CommentReply[];
+}
+
+export interface ReviewSummary {
+  ratingAverage: number | null;
+  ratingCount: number;
+  distribution: Record<'1' | '2' | '3' | '4' | '5', number>;
+}
+
+export interface CourseReviewPermissions {
+  canReview: boolean;
+  canReply: boolean;
+}
+
+export interface CourseReviewsResponse {
+  summary: ReviewSummary;
+  reviews: CourseReview[];
+  mine: CourseReview | null;
+  permissions: CourseReviewPermissions;
+}

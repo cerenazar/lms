@@ -630,3 +630,79 @@ Body: `{ "questionIds": string[] }`: sınavdaki soruların tamamı, her biri bir
 ### PUT /api/v1/exams/:id/candidates
 Body: `{ "userIds": string[] }`: seçili öğrenci listesini tümüyle değiştirir; hepsi kursa kayıtlı olmalıdır (aksi 400).
 200: GET ile aynı · 409 `EXAM_NOT_PUBLISHABLE` (yayındaki `SELECTED` sınavda boş liste)
+
+## Lesson Comments (Ders yorumları)
+
+Saklama: `LessonComment` tablosu. `parentId` boşsa üst düzey öğrenci yorumudur; doluysa eğitmen/admin yanıtıdır (yalnızca tek seviye; `authorRole` yanıtlarda yazma anındaki aktif rol: `"INSTRUCTOR"` | `"ADMIN"`). Ders veya yazar silinirse yorumlar, üst düzey yorum silinirse yanıtları da silinir. Yalnızca YAYINLANMIŞ dersler için geçerlidir (yok/taslak ders → 404 `Ders bulunamadı.`). Hiçbir yanıtta e-posta dönmez.
+
+Yetki: okuma = ADMIN / kursa atanmış INSTRUCTOR **veya** kursa kayıtlı kullanıcı (değilse 403 `NOT_ENROLLED`). Üst düzey yorum yazma = yalnızca kursa KAYITLI kullanıcı (rolden bağımsız). Yanıt yazma = ADMIN / kursa atanmış INSTRUCTOR. Düzenleme = yalnızca yazar. Silme = yazar veya ADMIN / atanmış INSTRUCTOR.
+
+Doğrulama: `body` string, trim sonrası 1–2000 karakter; aksi 400 `VALIDATION_ERROR`.
+
+Tipler (tarihler ISO string):
+`CommentAuthor = { "id", "name", "avatarUrl": string | null }`
+`CommentReply = { "id", "body", "createdAt", "editedAt": string | null, "author": CommentAuthor, "authorRole": "INSTRUCTOR" | "ADMIN", "canEdit": boolean, "canDelete": boolean }`
+`LessonComment = { "id", "body", "createdAt", "editedAt": string | null, "author": CommentAuthor, "canEdit": boolean, "canDelete": boolean, "replies": CommentReply[] }`
+`canEdit`/`canDelete` isteği yapan kullanıcıya göre hesaplanır. Üst düzey yorumlar yeniden eskiye (en fazla 200), yanıtlar eskiden yeniye sıralıdır.
+
+### GET /api/v1/lessons/:lessonId/comments
+Header: `Authorization: Bearer <token>`
+200: `{ "comments": LessonComment[], "permissions": { "canComment": boolean, "canReply": boolean } }` (`canComment` = kayıtlı, `canReply` = yönetici)
+401 `UNAUTHORIZED` · 403 `NOT_ENROLLED` · 404 `NOT_FOUND`
+
+### POST /api/v1/lessons/:lessonId/comments
+Body: `{ "body": string }` (yalnızca kayıtlı kullanıcı)
+201: `{ "comment": LessonComment }` · 400 `VALIDATION_ERROR` · 403 `NOT_ENROLLED` · 404
+
+### POST /api/v1/lesson-comments/:commentId/replies
+Body: `{ "body": string }` (ADMIN / atanmış INSTRUCTOR)
+201: `{ "reply": CommentReply }`
+400 `REPLY_DEPTH_EXCEEDED` ("Yanıtlara yanıt verilemez.") · 400 `VALIDATION_ERROR` · 403 `FORBIDDEN` ("Yalnızca kursun eğitmenleri ve yöneticiler yanıt verebilir.") · 404 `NOT_FOUND` ("Yorum bulunamadı.")
+
+### PATCH /api/v1/lesson-comments/:commentId
+Body: `{ "body": string }` (yalnızca yazar; `editedAt` doldurulur)
+200: `{ "comment": LessonComment }` ya da hedef yanıtsa `{ "reply": CommentReply }`
+400 · 403 `FORBIDDEN` ("Yalnızca kendi yorumunuzu düzenleyebilirsiniz.") veya `NOT_ENROLLED` · 404
+
+### DELETE /api/v1/lesson-comments/:commentId
+Yazar veya ADMIN / atanmış INSTRUCTOR. Üst düzey yorumun yanıtları da silinir.
+200: `{ "success": true }` · 403 `FORBIDDEN` ("Bu yorumu silme yetkiniz yok.") · 404
+
+## Course Reviews (Kurs değerlendirmeleri)
+
+Saklama: `CourseReview` (kullanıcı, kurs) başına en fazla bir kayıt (`rating` 1–5 tam sayı, `body` opsiyonel) ve `CourseReviewReply` (eğitmen/admin yanıtı, tek seviye, `authorRole` `"INSTRUCTOR"` | `"ADMIN"`). Kurs/kullanıcı silinirse kayıtlar, değerlendirme silinirse yanıtları da silinir. Yayınlanmamış kurs yönetici olmayanlara 404 `Kurs bulunamadı.` döner. Yetki kuralları Lesson Comments ile aynıdır (okuma: yönetici veya kayıtlı; değerlendirme yazma: yalnızca kayıtlı; yanıt: yönetici; düzenleme: yazar; silme: yazar veya yönetici). E-posta dönmez.
+
+Doğrulama: `rating` 1–5 tam sayı (POST'ta zorunlu, PATCH'te opsiyonel; `0`, `6`, `3.5`, string → 400 `VALIDATION_ERROR`). `body` opsiyonel: yok/null/boş → `null`; doluysa trim sonrası ≤2000. PATCH'te `rating` veya `body`'den en az biri gerekir. Yanıt `body`'si zorunlu, 1–2000.
+
+Tipler:
+`CourseReview = { "id", "rating": number, "body": string | null, "createdAt", "editedAt": string | null, "author": CommentAuthor, "canEdit", "canDelete", "replies": CommentReply[] }` (`CommentReply`/`CommentAuthor` için Lesson Comments bölümüne bakın)
+`ReviewSummary = { "ratingAverage": number | null, "ratingCount": number, "distribution": { "1": n, "2": n, "3": n, "4": n, "5": n } }` (`ratingAverage` 1 ondalığa yuvarlanır; değerlendirme yoksa `null`). Değerlendirmeler yeniden eskiye (en fazla 200).
+
+### GET /api/v1/courses/:courseId/reviews
+200: `{ "summary": ReviewSummary, "reviews": CourseReview[], "mine": CourseReview | null, "permissions": { "canReview": boolean, "canReply": boolean } }` (`canReview` = kayıtlı ve henüz değerlendirmemiş)
+401 · 403 `NOT_ENROLLED` · 404
+
+### POST /api/v1/courses/:courseId/reviews
+Body: `{ "rating": 1..5, "body"?: string | null }`
+201: `{ "review": CourseReview, "summary": ReviewSummary }`
+400 `VALIDATION_ERROR` · 403 `NOT_ENROLLED` · 404 · 409 `REVIEW_EXISTS` ("Bu kursu zaten değerlendirdiniz.")
+
+### PATCH /api/v1/course-reviews/:reviewId
+Body: `{ "rating"?: 1..5, "body"?: string | null }` (yalnızca yazar; `editedAt` doldurulur)
+200: `{ "review": CourseReview, "summary": ReviewSummary }` · 400 · 403 · 404 (`Değerlendirme bulunamadı.`)
+
+### DELETE /api/v1/course-reviews/:reviewId
+Yazar veya ADMIN / atanmış INSTRUCTOR; yanıtlar da silinir.
+200: `{ "success": true, "summary": ReviewSummary }` · 403 `FORBIDDEN` · 404
+
+### POST /api/v1/course-reviews/:reviewId/replies
+Body: `{ "body": string }` (ADMIN / atanmış INSTRUCTOR)
+201: `{ "reply": CommentReply }` · 400 · 403 `FORBIDDEN` · 404
+
+### PATCH /api/v1/course-review-replies/:replyId
+Body: `{ "body": string }` (yalnızca yazar)
+200: `{ "reply": CommentReply }` · 400 · 403 · 404 (`Yanıt bulunamadı.`)
+
+### DELETE /api/v1/course-review-replies/:replyId
+Yazar veya ADMIN / atanmış INSTRUCTOR.
+200: `{ "success": true }` · 403 · 404
